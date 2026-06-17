@@ -1,187 +1,181 @@
+import "dotenv/config";
 import { Ollama } from "ollama";
 import fs from "fs/promises";
 import path from "path";
 
-const client = new Ollama({
-  host: "http://localhost:11434",
-});
+// Validación temprana de config
+const OLLAMA_HOST = process.env.OLLAMA_HOST;
+const MODEL = process.env.OLLAMA_MODEL;
 
+if (!OLLAMA_HOST || !MODEL) {
+  console.error("❌ Faltan variables: OLLAMA_HOST y OLLAMA_MODEL requeridas");
+  process.exit(1);
+}
+
+const client = new Ollama({ host: OLLAMA_HOST });
+
+// ✏️ Edita aquí la transcripción del cliente
 const transcripcion = `
-Cliente:
-
-Necesito un sistema para una veterinaria.
-
-Quiero gestionar pacientes, dueños, citas,
-expedientes médicos y recordatorios por WhatsApp.
-
-También quiero reportes, control de pagos,
-inventario de medicamentos y facturación.
+Cliente: Necesito un sistema que cuando le mando un audio lo transcriba en texto 
+de mi cliente para capturar requerimientos y obtener los requerimientos. 
+La idea principal es tener documentadas las llamadas de los clientes y obtener 
+los requerimientos. Es una empresa que desarrolla aplicaciones y es consultora.
 `;
+
+async function verificarConexion(): Promise<void> {
+  try {
+    console.log("🔌 Verificando conexión...");
+    const res = await fetch(`${OLLAMA_HOST}/api/tags`);
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status}`);
+    }
+    const data = await res.json() as { models: { name: string }[] };
+    console.log("✅ Conexión exitosa");
+    console.log("📦 Modelos disponibles:");
+    for (const model of data.models) {
+      console.log(`   • ${model.name}`);
+    }
+    console.log("");
+  } catch (error) {
+    console.error("❌ Error conectando con Ollama:");
+    console.error(error);
+    process.exit(1);
+  }
+}
 
 async function generarDocumento(
   nombre: string,
-  prompt: string
-) {
-  try {
-    console.log(`🚀 Generando ${nombre}...`);
+  prompt: string,
+  transcripcion: string,
+  reintentos = 2
+): Promise<void> {
+  for (let intento = 0; intento <= reintentos; intento++) {
+    try {
+      console.log(`⏳ Generando ${nombre}... (intento ${intento + 1})`);
+      const inicio = Date.now();
 
-    const response = await client.chat({
-      model: "qwen2.5-coder:7b",
-      messages: [
-        {
-          role: "system",
-          content: prompt,
-        },
-        {
-          role: "user",
-          content: transcripcion,
-        },
-      ],
-    });
+      const response = await client.chat({
+        model: MODEL,
+        options: { temperature: 0.2 },
+        messages: [
+          {
+            role: "system",
+            content: `Eres un consultor senior especializado en:
+- Arquitectura de Software
+- Product Management
+- Scrum
+- Bases de Datos
+- SaaS Empresariales
 
-    const archivo = path.join(
-      "output",
-      `${nombre}.md`
-    );
+Debes generar documentación profesional en Markdown bien estructurada.
+${prompt}`,
+          },
+          { role: "user", content: transcripcion },
+        ],
+      });
 
-    await fs.writeFile(
-      archivo,
-      response.message.content,
-      "utf8"
-    );
-
-    console.log(`✅ ${nombre}.md generado`);
-  } catch (error) {
-    console.error(
-      `❌ Error generando ${nombre}:`,
-      error
-    );
+      const tiempo = ((Date.now() - inicio) / 1000).toFixed(1);
+      const archivo = path.join("output", `${nombre}.md`);
+      await fs.writeFile(archivo, response.message.content, "utf8");
+      console.log(`   ✅ ${nombre}.md generado (${tiempo}s)`);
+      return;
+    } catch (error) {
+      if (intento === reintentos) {
+        console.error(`   ❌ ${nombre} falló después de ${reintentos + 1} intentos`);
+        console.error(error);
+      } else {
+        console.warn(`   ⚠️  Reintentando ${nombre} en 2s...`);
+        await new Promise((r) => setTimeout(r, 2000));
+      }
+    }
   }
 }
 
 async function main() {
-  await fs.mkdir("output", {
-    recursive: true,
-  });
+  console.clear();
+  console.log("=================================");
+  console.log("   AI BUSINESS ANALYST");
+  console.log("=================================");
+  console.log(`🌐 Host: ${OLLAMA_HOST}`);
+  console.log(`🤖 Modelo: ${MODEL}`);
+  console.log("");
+
+  await verificarConexion();
+
+
+
+  await fs.mkdir("output", { recursive: true });
 
   const trabajos = [
     {
       nombre: "resumen",
-      prompt: `
-Eres un analista de negocio senior.
-
-Genera:
-
+      prompt: `Genera un documento con las siguientes secciones:
 # Resumen Ejecutivo
 # Objetivos del Proyecto
 # Problemas Detectados
 # Beneficios Esperados
-
-Sé extremadamente detallado.
-      `,
+Sé extremadamente detallado y profesional.`,
     },
-
     {
       nombre: "requerimientos",
-      prompt: `
-Eres Product Owner Senior.
-
-Genera:
-
+      prompt: `Genera un documento con las siguientes secciones:
 # Requerimientos Funcionales
 # Requerimientos No Funcionales
 # Restricciones
-# Integraciones Externas
-# Roles de Usuario
-
-Mínimo 30 requerimientos.
-      `,
+# Integraciones
+# Roles del Sistema
+Incluye mínimo 30 requerimientos en total, numerados y bien descritos.`,
     },
-
     {
       nombre: "historias-usuario",
-      prompt: `
-Eres Product Owner Senior.
-
-Genera mínimo 30 historias de usuario.
-
-Formato:
-
-Como [rol]
-Quiero [acción]
-Para [beneficio]
-
-Agrúpalas por módulos.
-      `,
+      prompt: `Genera mínimo 30 historias de usuario en formato:
+"Como [rol], quiero [acción] para [beneficio]"
+Agrúpalas por módulos del sistema. Incluye criterios de aceptación para cada una.`,
     },
-
     {
       nombre: "arquitectura",
-      prompt: `
-Eres Arquitecto de Software Senior.
-
-Diseña:
-
+      prompt: `Diseña la arquitectura del sistema con las siguientes secciones:
 # Arquitectura General
 # Frontend
 # Backend
 # Base de Datos
+# APIs e Integraciones
 # Seguridad
-# APIs
 # Infraestructura
-# Escalabilidad
-
-Incluye diagramas ASCII.
-      `,
+Incluye diagramas ASCII donde sea relevante.`,
     },
-
     {
       nombre: "database",
-      prompt: `
-Eres DBA Senior.
-
-Diseña:
-
-# Entidades
-# Relaciones
-# Campos
-# Índices
-# Restricciones
-
-Incluye ejemplos SQL.
-      `,
+      prompt: `Diseña el modelo de base de datos con:
+# Entidades Principales
+# Relaciones entre Entidades
+# Índices Recomendados
+# Restricciones e Integridad
+Incluye ejemplos de SQL (CREATE TABLE) para las entidades principales.`,
     },
-
     {
       nombre: "backlog",
-      prompt: `
-Eres Scrum Master Senior.
-
-Genera:
-
-# MVP
+      prompt: `Genera el backlog del proyecto con:
+# MVP (Producto Mínimo Viable)
 # Sprint 1
 # Sprint 2
 # Sprint 3
 # Sprint 4
-
-Prioriza tareas.
-
-Incluye estimaciones.
-      `,
+Incluye estimaciones en puntos de historia y descripción de cada tarea.`,
     },
   ];
 
-  for (const trabajo of trabajos) {
-    await generarDocumento(
-      trabajo.nombre,
-      trabajo.prompt
+  // Procesar en lotes de 2 para no saturar Ollama
+  const LOTE = 2;
+  for (let i = 0; i < trabajos.length; i += LOTE) {
+    const lote = trabajos.slice(i, i + LOTE);
+    await Promise.all(
+      lote.map((t) => generarDocumento(t.nombre, t.prompt, transcripcion))
     );
   }
 
-  console.log(
-    "\n🎉 Todos los documentos fueron generados."
-  );
+  console.log("");
+  console.log("🎉 Todos los documentos fueron generados en ./output/");
 }
 
 main();

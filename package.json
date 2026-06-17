@@ -5,15 +5,21 @@
   "main": "main.ts",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "dev": " nodemon  main.ts"
+    "dev": "nodemon --exec ts-node main.ts"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "type": "module",
   "dependencies": {
+    "dotenv": "^17.4.2",
     "fs": "^0.0.1-security",
     "nodemon": "^3.1.14",
     "ollama": "^0.6.3"
+  },
+  "devDependencies": {
+    "@types/node": "^25.9.3",
+    "ts-node": "^10.9.2",
+    "typescript": "^6.0.3"
   }
 }
