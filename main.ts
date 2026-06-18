@@ -51,41 +51,91 @@ async function generarDocumento(
 ): Promise<void> {
   for (let intento = 0; intento <= reintentos; intento++) {
     try {
-      console.log(`⏳ Generando ${nombre}... (intento ${intento + 1})`);
+      console.log(`\n🚀 Generando ${nombre}...`);
+
       const inicio = Date.now();
 
-      const response = await client.chat({
+      const stream = await client.chat({
         model: MODEL,
-        options: { temperature: 0.2 },
+        stream: true,
+        options: {
+          temperature: 0.2,
+        },
         messages: [
           {
             role: "system",
-            content: `Eres un consultor senior especializado en:
+            content: `
+Eres un consultor senior especializado en:
+
 - Arquitectura de Software
 - Product Management
 - Scrum
 - Bases de Datos
 - SaaS Empresariales
 
-Debes generar documentación profesional en Markdown bien estructurada.
-${prompt}`,
+Debes generar documentación profesional en Markdown.
+
+${prompt}
+`,
           },
-          { role: "user", content: transcripcion },
+          {
+            role: "user",
+            content: transcripcion,
+          },
         ],
       });
 
-      const tiempo = ((Date.now() - inicio) / 1000).toFixed(1);
-      const archivo = path.join("output", `${nombre}.md`);
-      await fs.writeFile(archivo, response.message.content, "utf8");
-      console.log(`   ✅ ${nombre}.md generado (${tiempo}s)`);
+      let contenido = "";
+
+      process.stdout.write("\n");
+      process.stdout.write("────────────────────────────\n");
+
+      for await (const chunk of stream) {
+        const texto = chunk.message?.content ?? "";
+
+        contenido += texto;
+
+        process.stdout.write(texto);
+      }
+
+      process.stdout.write("\n");
+      process.stdout.write("────────────────────────────\n");
+
+      const archivo = path.join(
+        "output",
+        `${nombre}.md`
+      );
+
+      await fs.writeFile(
+        archivo,
+        contenido,
+        "utf8"
+      );
+
+      const tiempo = (
+        (Date.now() - inicio) /
+        1000
+      ).toFixed(1);
+
+      console.log(
+        `\n✅ ${nombre}.md generado (${tiempo}s)`
+      );
+
       return;
     } catch (error) {
       if (intento === reintentos) {
-        console.error(`   ❌ ${nombre} falló después de ${reintentos + 1} intentos`);
+        console.error(
+          `❌ ${nombre} falló`
+        );
         console.error(error);
       } else {
-        console.warn(`   ⚠️  Reintentando ${nombre} en 2s...`);
-        await new Promise((r) => setTimeout(r, 2000));
+        console.log(
+          `⚠️ Reintentando ${nombre}...`
+        );
+
+        await new Promise((r) =>
+          setTimeout(r, 2000)
+        );
       }
     }
   }
