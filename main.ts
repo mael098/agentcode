@@ -5,7 +5,7 @@ import path from "path";
 
 // Validación temprana de config
 const OLLAMA_HOST = process.env.OLLAMA_HOST;
-const MODEL = process.env.OLLAMA_MODEL;
+const MODEL = process.env.OLLAMA_MODEL || "";
 
 if (!OLLAMA_HOST || !MODEL) {
   console.error("❌ Faltan variables: OLLAMA_HOST y OLLAMA_MODEL requeridas");
@@ -16,9 +16,9 @@ const client = new Ollama({ host: OLLAMA_HOST });
 
 // ✏️ Edita aquí la transcripción del cliente
 const transcripcion = `
-Cliente: Necesito un sistema que cuando le mando un audio lo transcriba en texto 
-de mi cliente para capturar requerimientos y obtener los requerimientos. 
-La idea principal es tener documentadas las llamadas de los clientes y obtener 
+Cliente: Necesito un sistema que cuando le mando un audio lo transcriba en texto
+de mi cliente para capturar requerimientos y obtener los requerimientos.
+La idea principal es tener documentadas las llamadas de los clientes y obtener
 los requerimientos. Es una empresa que desarrolla aplicaciones y es consultora.
 `;
 
@@ -29,7 +29,7 @@ async function verificarConexion(): Promise<void> {
     if (!res.ok) {
       throw new Error(`HTTP ${res.status}`);
     }
-    const data = await res.json() as { models: { name: string }[] };
+    const data = (await res.json()) as { models: { name: string }[] };
     console.log("✅ Conexión exitosa");
     console.log("📦 Modelos disponibles:");
     for (const model of data.models) {
@@ -47,7 +47,7 @@ async function generarDocumento(
   nombre: string,
   prompt: string,
   transcripcion: string,
-  reintentos = 2
+  reintentos = 2,
 ): Promise<void> {
   for (let intento = 0; intento <= reintentos; intento++) {
     try {
@@ -101,41 +101,23 @@ ${prompt}
       process.stdout.write("\n");
       process.stdout.write("────────────────────────────\n");
 
-      const archivo = path.join(
-        "output",
-        `${nombre}.md`
-      );
+      const archivo = path.join("output", `${nombre}.md`);
 
-      await fs.writeFile(
-        archivo,
-        contenido,
-        "utf8"
-      );
+      await fs.writeFile(archivo, contenido, "utf8");
 
-      const tiempo = (
-        (Date.now() - inicio) /
-        1000
-      ).toFixed(1);
+      const tiempo = ((Date.now() - inicio) / 1000).toFixed(1);
 
-      console.log(
-        `\n✅ ${nombre}.md generado (${tiempo}s)`
-      );
+      console.log(`\n✅ ${nombre}.md generado (${tiempo}s)`);
 
       return;
     } catch (error) {
       if (intento === reintentos) {
-        console.error(
-          `❌ ${nombre} falló`
-        );
+        console.error(`❌ ${nombre} falló`);
         console.error(error);
       } else {
-        console.log(
-          `⚠️ Reintentando ${nombre}...`
-        );
+        console.log(`⚠️ Reintentando ${nombre}...`);
 
-        await new Promise((r) =>
-          setTimeout(r, 2000)
-        );
+        await new Promise((r) => setTimeout(r, 2000));
       }
     }
   }
@@ -151,8 +133,6 @@ async function main() {
   console.log("");
 
   await verificarConexion();
-
-
 
   await fs.mkdir("output", { recursive: true });
 
@@ -220,7 +200,7 @@ Incluye estimaciones en puntos de historia y descripción de cada tarea.`,
   for (let i = 0; i < trabajos.length; i += LOTE) {
     const lote = trabajos.slice(i, i + LOTE);
     await Promise.all(
-      lote.map((t) => generarDocumento(t.nombre, t.prompt, transcripcion))
+      lote.map((t) => generarDocumento(t.nombre, t.prompt, transcripcion)),
     );
   }
 
